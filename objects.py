@@ -14,6 +14,10 @@ PIPE_IMGS = pygame.transform.scale2x(pygame.image.load(os.path.join("imgs", "pip
 BASE_IMGS = pygame.transform.scale2x(pygame.image.load(os.path.join("imgs", "base.png")))
 BG_IMGS = pygame.transform.scale2x(pygame.image.load(os.path.join("imgs", "bg.png")))
 STAT_FONT = pygame.font.SysFont("comicsnas", 50)
+OVER_IMG = pygame.image.load(os.path.join("imgs","gameover.png"))
+OVER_IMG = pygame.transform.scale(OVER_IMG, (500, 800))
+START_IMG = pygame.image.load(os.path.join("imgs", "get_start.png"))
+START_IMG = pygame.transform.scale(START_IMG, (500, 800))
 
 class bird:
     IMGS = BIRDS_IMGS
@@ -88,6 +92,7 @@ class bird:
             self.img = self.IMGS[2]
         elif self.img_count < self.ANIMATION_TIME * 4:
             self.img = self.IMGS[1]
+
         elif self.img_count == self.ANIMATION_TIME * 4 + 1:
             self.img = self.IMGS[0]
             self.img_count = 0
@@ -196,53 +201,86 @@ def draw_window(window, bird, pipes, base, score):
     bird.draw(window)
     pygame.display.update()
 
-     
+def show_over(window):
+    window.blit(OVER_IMG, (0, 0))
+    pygame.display.update()
+def show_start(window):
+    window.blit(START_IMG, (0, 0))
+    pygame.display.update()
+
+
 def main():
-    mbird = bird(230, 350)
-    base = Base(630)
-    pipes = [Pipe(700)]
-    score = 0
+
     window = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
     #使用clock物件來控制執行的速度
     clock = pygame.time.Clock()
-
+    run1 = False
+    show_start(window)
     #遊戲起點
     run = True
     while run:
-        clock.tick(30)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_0:
+                    run1 = True
         #mbird.move()
         # rem用來儲存即將要remove的pipe
-        # add_pipe用來判斷是否要新曾Pipe
-        add_pipe = False
-        rem = []
-        for pipe in pipes:
-            if pipe.collide(mbird):
-                # 撞到鳥要結束
-                pass
-            # if pipe超出螢幕
-            if pipe.x + pipe.pipe_top.get_width() < 0:
-                rem.append(pipe)
-            # 如果鳥飛過去pipe而且已經超過pipe了
-            if not pipe.passed and pipe.x < mbird.x:
-                pipe.passed = True
-                add_pipe = True
-            pipe.move()
-        # 新增pipe並+1分
-        if add_pipe:
-            score += 1
-            pipes.append(Pipe(600))
-        # 把要刪除的pipe移除
-        for r in rem:
-            pipes.remove(r)
+        # add_pipe用來判斷是否要新Pipe
+        mbird = bird(230, 350)
+        base = Base(630)
+        pipes = [Pipe(700)]
+        score = 0
+        over = False
+        while run1:
+            clock.tick(30)
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_KP_ENTER:
+                        run1 = False
+                        time.sleep(1)
+                        over = True
+                    elif event.key == pygame.K_SPACE:
+                        mbird.jump()
+            mbird.move()
+            add_pipe = False
+            rem = []
+            for pipe in pipes:
+                if pipe.collide(mbird):
+                    # 撞到鳥要結束
+                    while mbird.y < 730:
+                        mbird.y +=30
+                        mbird.move()
+                        draw_window(window, mbird, pipes, base, score)
+                    run1 = False
+                    over = True
+                 
+                # if pipe超出螢幕
+                if pipe.x + pipe.pipe_top.get_width() < 0:
+                    rem.append(pipe)
+                # 如果鳥飛過去pipe而且已經超過pipe了
+                if not pipe.passed and pipe.x < mbird.x:
+                    pipe.passed = True
+                    add_pipe = True
+                pipe.move()
+            # 新增pipe並+1分
+            if add_pipe:
+                score += 1
+                pipes.append(Pipe(600))
+            # 把要刪除的pipe移除
+            for r in rem:
+                pipes.remove(r)
 
-        if mbird.y + mbird.img.get_height() >= 730:
-            pass
-        base.move()
-        draw_window(window, mbird, pipes, base, score)
+            if mbird.y + mbird.img.get_height() >= 730:
+                run1 = False
+                over = True
+            base.move()
+            draw_window(window, mbird, pipes, base, score)
+            if over:
+                show_over(window)
 
+        
     pygame.quit()
     quit()
 

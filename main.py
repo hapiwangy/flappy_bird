@@ -78,7 +78,6 @@ class bird:
     def draw(self, win):
         # 判斷已經刷新幾張圖片了
         self.img_count += 1
-
         if self.img_count  < self.ANIMATION_TIME:
             self.img = self.IMGS[0]
         elif self.img_count < self.ANIMATION_TIME * 2:
@@ -87,6 +86,7 @@ class bird:
             self.img = self.IMGS[2]
         elif self.img_count < self.ANIMATION_TIME * 4:
             self.img = self.IMGS[1]
+
         elif self.img_count == self.ANIMATION_TIME * 4 + 1:
             self.img = self.IMGS[0]
             self.img_count = 0
@@ -229,7 +229,7 @@ def main(genomes, config):
     #遊戲起點
     run = True
     while run:
-        clock.tick(-30)
+        clock.tick(30)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
