@@ -3,7 +3,7 @@ import pygame, neat, time, os, random
 pygame.font.init()
 WIN_WIDTH = 500
 WIN_HEIGHT = 800
-
+GEN = 0
 # scale2x:把圖片變成兩倍大，比較容易檢視
 BIRDS_IMGS = [pygame.transform.scale2x(pygame.image.load(os.path.join("imgs", "bird1.png"))),
             pygame.transform.scale2x(pygame.image.load(os.path.join("imgs", "bird2.png"))),
@@ -72,7 +72,7 @@ class bird:
                 self.tilt = self.MAX_ROTATION
         # 如果不是的話，讓鳥往下傾斜
         else:
-            if self.tilt  >= -90:
+            if self.tilt  > -90:
                 self.tilt -= self.ROT_VEL
     # 這裡不斷刷新鳥的三張圖讓他有拍翅膀的感覺
     def draw(self, win):
@@ -184,20 +184,41 @@ class Base:
         window.blit(self.IMG, (self.x1, self.y))
         window.blit(self.IMG, (self.x2, self.y))
 # 把所有的東西畫到window上面
-def draw_window(window, bird, pipes, base, score):
+def draw_window(window, birds, pipes, base, score, gen):
     window.blit(BG_IMGS, (0,0))
     for pipe in pipes:
         pipe.draw(window)
     text = STAT_FONT.render("Scores :" + str(score), 1, (255, 255, 255))
     window.blit(text, (WIN_WIDTH - 10 - text.get_width(), 10))
+    text = STAT_FONT.render("Gen :" + str(gen), 1, (255, 255, 255))
+    window.blit(text, (10, 10))
+        
     base.draw(window)
     # bilt代表把東西畫到前面的那個window上面
-    bird.draw(window)
+    for mbird in birds:
+        mbird.draw(window)
     pygame.display.update()
 
      
-def main():
-    mbird = bird(230, 350)
+def main(genomes, config):
+    nets = []
+    ge = []
+    birds = []
+    global GEN
+    GEN += 1
+    # 用上面的這些list來不斷紀錄目前的狀況之類的
+    # 一個紀錄鳥，一個紀錄該鳥的訓練情況，一個紀錄他的參數等等
+    # 也就是說對應的位置存放對應的物件和他的資訊
+    
+    # genomes由(index, geno_obj)組成，而我們只要後者 
+    for _, g in genomes:
+        net = neat.nn.FeedForwardNetwork.create(g, config)
+        nets.append(net)
+        birds.append(bird(230, 350))
+        g.fitness = 0
+        ge.append(g)
+
+
     base = Base(630)
     pipes = [Pipe(700)]
     score = 0
@@ -208,41 +229,95 @@ def main():
     #遊戲起點
     run = True
     while run:
-        clock.tick(30)
+        clock.tick(-30)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
+                pygame.quit()
+                quit()
+        # 要判斷哪個pipe是當前這個要通過得
+        pipe_ind = 0
+        if len(birds) > 0:
+            # 如果有一根以上的pipe且鳥鳥們(因為大家X都一樣)已經偷過第一個pipeㄌ
+            if len(pipes) > 1 and birds[0].x > pipes[0].x + pipes[0].pipe_top.get_width():
+                pipe_ind = 1
+        else:
+            # 沒鳥了就結束
+            run = False
+            break
+        for x, mbird in enumerate(birds):
+            mbird.move()
+            # 如果鳥活下來了(正在前進)也要給分
+            # 因為一秒會跑30次，也就是每撐過1秒就會+3分
+            # 這裡鼓勵鳥不要亂飛
+            ge[x].fitness += 0.1
+
+            output = nets[x].activate((mbird.y, abs(mbird.y - pipes[pipe_ind].height), abs(mbird.y - pipes[pipe_ind].bottom)))
+            # 因為outpuy是一個list(可以包含很多個output neurol，只是flappy bird只用到一個)
+            if output[0] > 0.5:
+                mbird.jump() 
+
+
         #mbird.move()
         # rem用來儲存即將要remove的pipe
         # add_pipe用來判斷是否要新曾Pipe
         add_pipe = False
         rem = []
         for pipe in pipes:
-            if pipe.collide(mbird):
-                # 撞到鳥要結束
-                pass
-            # if pipe超出螢幕
+            for x, mbird in enumerate(birds):
+                if pipe.collide(mbird):
+                    # 撞到鳥要結束
+                    ge[x].fitness -= 1 # bird撞到Pipe就扣分(同樣score但沒撞到pipe分數會比較高)
+                    birds.pop(x)
+                    nets.pop(x)
+                    ge.pop(x)
+                    
+                if not pipe.passed and pipe.x < mbird.x:
+                    pipe.passed = True
+                    add_pipe = True
             if pipe.x + pipe.pipe_top.get_width() < 0:
                 rem.append(pipe)
-            # 如果鳥飛過去pipe而且已經超過pipe了
-            if not pipe.passed and pipe.x < mbird.x:
-                pipe.passed = True
-                add_pipe = True
             pipe.move()
         # 新增pipe並+1分
         if add_pipe:
             score += 1
+            # 鼓勵通過pipe的鳥，可以直接看ge是因為bird如果會被刪除早就沒了
+            for g in ge:
+                g.fitness += 5
             pipes.append(Pipe(600))
         # 把要刪除的pipe移除
         for r in rem:
             pipes.remove(r)
-
-        if mbird.y + mbird.img.get_height() >= 730:
-            pass
+        for x, mbird in enumerate(birds):
+            if mbird.y + mbird.img.get_height() >= 730 or mbird.y < 0:
+                birds.pop(x)
+                nets.pop(x)
+                ge.pop(x)
         base.move()
-        draw_window(window, mbird, pipes, base, score)
+        draw_window(window, birds, pipes, base, score, GEN)
 
-    pygame.quit()
-    quit()
 
-main( )
+
+def run(config_path):
+    # 把設定好的設定引入
+    config = neat.config.Config(neat.DefaultGenome , neat.DefaultReproduction,
+                                neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                                config_path)
+    # 設定population
+    p = neat.Population(config)
+    # output
+    p.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    p.add_reporter(stats)
+
+    # set fitness function
+    # 下面這行會跑50次main
+    winner = p.run(main, 50)
+
+
+
+if __name__ == '__main__':
+    # 下面兩行把路徑找到
+    local_dir = os.path.dirname(__file__)
+    config_path = os.path.join(local_dir, "config-feedforward.txt")
+    run(config_path)

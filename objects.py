@@ -1,3 +1,4 @@
+# 之後要補鍵盤操作
 import pygame, neat, time, os, random
 
 pygame.font.init()
